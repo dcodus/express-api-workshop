@@ -10,10 +10,20 @@ var connection = db.createConnection({
     database: 'addressbook'
 });
 
+
+app.get('/', function(req, res){
+    console.log('The root folder was accessed!')
+    res.send('This is the root folder!');
+})
+
 connection.connect();
 
 connection.query("SELECT * FROM Account", function(err, rows){
-    console.log(rows);
+    
 })
 
 connection.end();
+
+app.listen(process.env.PORT, function(){
+    console.log("Server initialized. Listening on port " + process.env.PORT + '.');
+})
