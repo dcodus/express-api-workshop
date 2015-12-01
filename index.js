@@ -13,12 +13,12 @@ var connection = db.createConnection({
 connection.connect();
 
 
-app.use('/signIn', function(req, res, next) {
+app.use(function(req, res, next) {
     req.accountId = 1;
     next();
 })
 
-app.get('/signIn/AddressBook', function(req, res) {
+app.get('/AddressBook', function(req, res) {
     console.log(req.accountId);
     connection.query("SELECT * FROM AddressBook where AddressBook.accountId=" + req.accountId, function(err, rows) {
         res.json(rows);
@@ -26,7 +26,7 @@ app.get('/signIn/AddressBook', function(req, res) {
 })
 
 
-app.get('/signIn/AddressBook/:id', function(req, res) {
+app.get('/AddressBook/:id', function(req, res) {
     connection.query("SELECT * FROM AddressBook where AddressBook.id=" + Number(req.params.id), function(err, rows) {
         if (rows) {
             rows.forEach(function(addressbook) {
@@ -44,8 +44,25 @@ app.get('/signIn/AddressBook/:id', function(req, res) {
 
 })
 
+app.post('/AddressBooks', function(req, res){
+    if(req.accountId){
+        if(req.body.name){
+            connection.query("INSERT into AddressBook (accountId, name) values ("+req.accountId+",'"+req.body.name+"')", function(err, rows){
+                console.log(rows);
+                connection.query("SELECT * FROM AddressBook where AddressBook.id="+rows.insertId, function(err, rows) {
+                    res.json(rows);
+                })
+            })
+        }
+    } else {
+        res.status(404).send("Account not found!");
+    }
+    res.end();
+})
+
 
 
 app.listen(process.env.PORT, function() {
     console.log("Server initialized. Listening on port " + process.env.PORT + '.');
 })
+
