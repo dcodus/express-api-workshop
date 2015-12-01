@@ -61,6 +61,17 @@ app.post('/AddressBooks', function(req, res){
 })
 
 
+app.delete('/AddressBooks/:id', function(req, res){
+    console.log(req.params)
+    if(req.accountId){
+        connection.query("DELETE FROM AddressBook where AddressBook.id="+Number(req.params.id), function(err, rows){
+            console.log(rows);
+            res.send("AddressBook Deleted!")
+        })
+    }
+})
+
+
 
 app.listen(process.env.PORT, function() {
     console.log("Server initialized. Listening on port " + process.env.PORT + '.');
