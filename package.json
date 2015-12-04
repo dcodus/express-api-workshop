@@ -17,6 +17,7 @@
   },
   "homepage": "https://github.com/dcodus/express-api-workshop#readme",
   "dependencies": {
+    "bcrypt-nodejs": "0.0.3",
     "body-parser": "^1.14.1",
     "express": "^4.13.3",
     "mysql": "^2.9.0",
