@@ -52,6 +52,8 @@ Entry.belongsTo(AddressBook, {
     foreignKey: 'addressbookId'
 });
 
+
+
 var Address = sequelize.define('Address', {
     type: Sequelize.STRING,
     line1: Sequelize.STRING,
@@ -90,7 +92,7 @@ Email.belongsTo(Entry, {
 
 var Phone = sequelize.define('Phone', {
     type: Sequelize.STRING,
-    subype: Sequelize.STRING,
+    subtype: Sequelize.STRING,
     phoneNumber: Sequelize.INTEGER
 }, {
     tableName: 'Phone'
@@ -116,7 +118,6 @@ app.use(function(req, res, next){
             console.log("Account id was set to " + req.accountId);
         } else {
             req.accountId = null;
-            res.status(404).send("Account not found");
         }
         next();
     });
@@ -124,11 +125,26 @@ app.use(function(req, res, next){
 
 
 app.get('/AddressBooks', function(req, res) {
-    AddressBook.findAll({
+    //Parsed the string fromthe query
+    var parsed = JSON.parse(req.query.filter);
+    console.log(parsed);
+    
+    var searchTerms = {
         where: {
             accountId: req.accountId,
-        }
-    }).then(function(result) {
+            
+        },
+        limit: req.query.limit,
+        offset: req.query.offset,
+        order: req.query.order,
+    }
+    //Looped over the keys and values
+    //Added them to the where object
+      Object.keys(parsed).forEach(function(key){
+         searchTerms.where[key] = parsed[key];
+    })
+    
+    AddressBook.findAll(searchTerms).then(function(result) {
         res.json(result);
     }, function(err) {
         res.status(404).send(err);
@@ -136,6 +152,8 @@ app.get('/AddressBooks', function(req, res) {
         console.log(err);
     });
 });
+
+//WORKS
 
 app.get('/AddressBooks/:id', function(req, res) {
     AddressBook.findAll({
@@ -150,29 +168,28 @@ app.get('/AddressBooks/:id', function(req, res) {
     });
 });
 
+//WORKS
+
 app.post("/AddressBooks", function(req, res) {
+    console.log(req.body);
+    console.log(req.accountId);
     if (req.body.name) {
         if (req.accountId) {
-            AddressBook.findOrCreate({
-                where: {
+            AddressBook.create({
                     name: req.body.name,
                     accountId: req.accountId
-                }
             }).then(function(result) {
-                return AddressBook.findOne({
-                    where: {
-                        id: result[0].id
-                    },
-                    attributes: {
-                        exclude: ['createdAt', 'updatedAt', 'accountId']
-                    }
-                });
-            }).then(function(result) {
+                if(result){
                 res.json(result);
+                } else {
+                    res.status(400).send("AddressBook exists!");
+                }
             });
         }
     }
 });
+
+//WORKS!
 
 app.delete('/AddressBooks/:id', function(req, res) {
     if (req.accountId) {
@@ -196,6 +213,8 @@ app.delete('/AddressBooks/:id', function(req, res) {
     }
 });
 
+//WORKS
+
 app.put('/AddressBooks/:id', function(req, res) {
     AddressBook.update({
         name: req.body.name
@@ -216,29 +235,92 @@ app.put('/AddressBooks/:id', function(req, res) {
     });
 });
 
-app.get('/Entries', function(req, res) {
-    Entry.findAll({
-        include: [{
-            model: AddressBook,
-            include: [{
-                model: Account,
-                where: {
-                    id: req.accountId
-                }
-            }]
-        }],
+//WORKS
+
+app.get('/Entries/:id', function(req, res) {
+        if(req.query.include){
+        var include = req.query.include.split(",");
+        } else {
+            include = [];
+        }
+        var newArr = include.map(function(prop){
+            return sequelize.model(prop);
+        })
+        console.log(newArr);
+        Entry.findOne({
+        include: [{model: AddressBook, where: {accountId: req.accountId}}].concat(newArr),
+        where: {
+            id: req.params.id
+        }
+    }).catch(function(err){
+        res.json(err);
     }).then(function(result) {
         res.json(result);
-    }, function(err) {
-        res.status(404).send(err);
-    }).catch(function(err) {
-        console.log(err);
-    });
+    })
+})
 
+
+//WORKS
+
+app.get('/Entries', function(req, res) {
+    
+    if(req.query.filter){
+        var parsed = JSON.parse(req.query.filter);
+        Entry.findAll({
+            include: [{
+                model: AddressBook,
+                include: [{
+                    model: Account,
+                    where: {
+                        id: req.accountId
+                    }
+                }]
+            }],
+            limit: req.query.limit,
+            offset: req.query.offset,
+            order: req.query.order,
+            where: parsed
+        }).then(function(result) {
+            res.json(result);
+        }, function(err) {
+            res.status(404).send(err);
+        })
+    } else {
+        
+        Entry.findAll({
+            include: [{
+                model: AddressBook,
+                include: [{
+                    model: Account,
+                    where: {
+                        id: req.accountId
+                    }
+                }]
+            }],
+            limit: req.query.limit,
+            offset: req.query.offset,
+            order: req.query.order,
+            attributes: {
+                exclude: ['createdAt', 'updatedAt', 'addressbookId']
+            }
+        }).then(function(result) {
+            res.json(result);
+            // var onlyEntry = result.get({plain: true});
+            // delete onlyEntry.AddressBook;
+            // res.json(onlyEntry);
+        
+        }).catch(function(err) {
+            res.json(err);
+        })
+    }
+    
 });
 
+//WORKS
 
 app.post('/Entries/:addressbookId', function(req, res) {
+    console.log(req.body);
+    console.log(req.params);
     AddressBook.findOne({where: {accountId: req.accountId, id: req.params.addressbookId}})
     .then(function(result) {
         if(result){
@@ -251,11 +333,14 @@ app.post('/Entries/:addressbookId', function(req, res) {
         } else {
             res.status(404).send("AddressBook not found!");
         }
+    }).catch(function(err){
+        res.json(err);
     }).then(function(result) {
         res.json(result);
     });
 });
 
+//DELETE
 
 app.delete('/Entries/:id', function(req, res) {
     Entry.findOne({
@@ -276,6 +361,7 @@ app.delete('/Entries/:id', function(req, res) {
     });
 });
 
+//WORKS
 
 app.put('/Entries/:id', function(req, res) {
    Entry.findOne({
@@ -298,6 +384,7 @@ app.put('/Entries/:id', function(req, res) {
    });
 });
 
+//WORKS
 
 app.get('/addresses/:id', function(req, res) {
     Address.findOne({
@@ -321,15 +408,22 @@ app.get('/addresses/:id', function(req, res) {
         },
         attributes: {
             exclude: ['Entry']
-        }
+        },
+        limit: req.query.limit,
+        offset: req.query.offset
     }).then(function(result) {
+        if(result){
         var plainObject = result.get({
             plain: true
         });
         delete plainObject.Entry;
         res.json(plainObject);
+        } else {
+            res.status(404).send("Not Found");
+        }
     });
 });
+
 
 
 app.get('/phones/:id', function(req, res) {
@@ -384,6 +478,46 @@ app.get('/emails/:id', function(req, res) {
     });
 });
 
+//WORKS
+
+app.get('/addresses/:entryId', function(req, res) {
+    Address.findAll({include: [{model: Entry, where: {id: req.params.entryId}, include: [{model: AddressBook, where: {accountId: req.accountId}}]}], limit: req.query.limit, offset:req.query.offset}).then(function(result) {
+        if(result){
+        res.json(result);
+        } else {
+            res.status(404).snend("Entry not found!");
+        }
+    })
+})
+
+//WORKS
+
+app.get('/phones/:entryId', function(req, res) {
+    Phone.findAll({include: [{model: Entry, where: {id: req.params.entryId}, include: [{model: AddressBook, where: {accountId: req.accountId}}]}], limit: req.query.limit, offset:req.query.offset}).then(function(result) {
+        if(result){
+        res.json(result);
+        } else {
+            res.status(404).snend("Entry not found!");
+        }
+    })
+})
+
+
+
+app.get('/emails/:entryId', function(req, res) {
+    Email.findAll({include: [{model: Entry, where: {id: req.params.entryId}, include: [{model: AddressBook, where: {accountId: req.accountId}}]}], limit: req.query.limit, offset:req.query.offset}).then(function(result) {
+        if(result){
+        res.json(result);
+        } else {
+            res.status(404).snend("Entry not found!");
+        }
+    })
+})
+
+//POST USING ENTRYID IN BODY
+
+//WORKS
+
 app.post('/addresses', function(req, res) {
     Entry.findOne({
         include: [{model: AddressBook, where: {accountId: req.accountId}}],
@@ -400,6 +534,8 @@ app.post('/addresses', function(req, res) {
     });
 });
 
+//WORKS
+
 app.post('/phones', function(req, res) {
     Entry.findOne({
         include: [{model: AddressBook, where: {accountId: req.accountId}}],
@@ -412,9 +548,12 @@ app.post('/phones', function(req, res) {
             res.status(404).send("Entry not found!");
         }
     }).then(function(result) {
+        
         res.json(result);
     });
 });
+
+//WORKS
 
 app.post('/emails', function(req, res) {
     Entry.findOne({
@@ -432,8 +571,11 @@ app.post('/emails', function(req, res) {
     });
 });
 
+
+//WORKS
+
 app.delete('/addresses/:id', function(req, res) {
-   Entry.findOne({include: [{model: AddressBook, where: {accountId: req.accountId}}], where: {id: req.body.entryId}}).then(function(result) {
+   Entry.findOne({include: [{model: AddressBook, where: {accountId: req.accountId}}]}).then(function(result) {
        if(result){
            return Address.destroy({
                where: {
@@ -447,9 +589,10 @@ app.delete('/addresses/:id', function(req, res) {
        res.send("Address deleted!");
    });
 });
+//WORKS
 
 app.delete('/phones/:id', function(req, res) {
-    Entry.findOne({include: [{model: AddressBook, where: {accountId: req.accountId}}], where: {id: req.body.entryId}}).then(function(result) {
+    Entry.findOne({include: [{model: AddressBook, where: {accountId: req.accountId}}]}).then(function(result) {
        if(result){
            return Phone.destroy({
                where: {
@@ -464,9 +607,10 @@ app.delete('/phones/:id', function(req, res) {
    });
 });
 
+//WORKS
 
 app.delete('/emails/:id', function(req, res) {
-   Entry.findOne({include: [{model: AddressBook, where: {accountId: req.accountId}}], where: {id: req.body.entryId}}).then(function(result) {
+   Entry.findOne({include: [{model: AddressBook, where: {accountId: req.accountId}}]}).then(function(result) {
        if(result){
            return Email.destroy({
                where: {
@@ -481,8 +625,10 @@ app.delete('/emails/:id', function(req, res) {
    });
 });
 
+//WORKS
+
 app.put('/addresses/:id', function(req, res) {
-    Entry.findOne({include: [{model: AddressBook, where: {accountId: req.accountId}}],where: {id: req.body.entryId}}).then(function(result) {
+    Entry.findOne({include: [{model: AddressBook, where: {accountId: req.accountId}}]}).then(function(result) {
         if(result){
             return Address.update(req.body, {where: {id: req.params.id}});
         } else {
@@ -495,9 +641,10 @@ app.put('/addresses/:id', function(req, res) {
     });
 });
 
+//WORKS
 
 app.put('/phones/:id', function(req, res) {
-    Entry.findOne({include: [{model: AddressBook, where: {accountId: req.accountId}}],where: {id: req.body.entryId}}).then(function(result) {
+    Entry.findOne({include: [{model: AddressBook, where: {accountId: req.accountId}}]}).then(function(result) {
         if(result){
             return Phone.update(req.body, {where: {id: req.params.id}});
         } else {
@@ -510,8 +657,10 @@ app.put('/phones/:id', function(req, res) {
     });
 });
 
-app.put('/emails/:addressbookId/:entryId/:id', function(req, res) {
-    Entry.findOne({include: [{model: AddressBook, where: {accountId: req.accountId}}],where: {id: req.body.entryId}}).then(function(result) {
+//WORKS
+
+app.put('/emails/:id', function(req, res) {
+    Entry.findOne({include: [{model: AddressBook, where: {accountId: req.accountId}}]}).then(function(result) {
         if(result){
             return Email.update(req.body, {where: {id: req.params.id}});
         } else {
@@ -600,8 +749,3 @@ app.listen(port, function() {
 });
 
 
-
-// var hash = bcrypt.hashSync("bacon");
-
-// console.log(bcrypt.compareSync("bacon", hash)); // true
-// console.log(bcrypt.compareSync("veggies", hash)); // false
